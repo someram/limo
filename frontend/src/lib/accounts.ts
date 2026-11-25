@@ -1,4 +1,4 @@
-const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000';
+import { API_URL } from '@/lib/api';
 
 export type StoredAccount = {
   email: string;
@@ -12,7 +12,14 @@ type ApiUser = {
   email: string;
 };
 
-class ApiError extends Error {
+type ApiBody = {
+  error?: string;
+  user?: ApiUser;
+};
+
+const REQUEST_TIMEOUT_MS = 15_000;
+
+export class ApiError extends Error {
   status: number;
 
   constructor(status: number, message: string) {
@@ -22,24 +29,40 @@ class ApiError extends Error {
 }
 
 async function request(path: string, email: string): Promise<ApiUser> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
   let response: Response;
   try {
     response = await fetch(`${API_URL}${path}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email }),
+      signal: controller.signal,
     });
-  } catch {
-    throw new ApiError(0, 'Cannot reach the server. Is it running?');
+  } catch (error) {
+    if (__DEV__) console.warn(`[api] ${path} request failed (${API_URL})`, error);
+    throw new ApiError(0, "We couldn't connect. Check your connection and try again.");
+  } finally {
+    clearTimeout(timeout);
   }
 
-  const data = await response.json().catch(() => null);
+  const data = (await response.json().catch(() => null)) as ApiBody | null;
 
   if (!response.ok) {
-    throw new ApiError(response.status, data?.error ?? 'Something went wrong.');
+    if (response.status >= 500) {
+      if (__DEV__) console.warn(`[api] ${path} server error`, response.status, data);
+      throw new ApiError(response.status, 'Something went wrong on our end. Please try again.');
+    }
+    throw new ApiError(response.status, data?.error ?? 'Something went wrong. Please try again.');
   }
 
-  return data.user as ApiUser;
+  if (!data?.user) {
+    if (__DEV__) console.warn(`[api] ${path} unexpected response`, response.status, data);
+    throw new ApiError(response.status, 'Something went wrong. Please try again.');
+  }
+
+  return data.user;
 }
 
 function toAccount(user: ApiUser): StoredAccount {

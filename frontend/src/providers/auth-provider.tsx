@@ -1,6 +1,6 @@
 import { createContext, use, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 
-import { createAccount, findAccount } from '@/lib/accounts';
+import { ApiError, createAccount, findAccount } from '@/lib/accounts';
 import { clearSession, readSession, writeSession } from '@/lib/session';
 import type { SessionUser } from '@/types';
 import { isValidEmail } from '@/utils/format';
@@ -55,21 +55,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     await wait(AUTH_DELAY_MS);
 
-    const existingAccount = await findAccount(normalizedEmail);
+    try {
+      const existingAccount = await findAccount(normalizedEmail);
 
-    if (mode === 'signin' && !existingAccount) {
-      throw new Error('No account found for this email. Sign up instead.');
+      if (mode === 'signin' && !existingAccount) {
+        throw new ApiError(400, 'No account found for this email. Sign up instead.');
+      }
+
+      if (mode === 'signup' && existingAccount) {
+        throw new ApiError(409, 'This email already has an account. Sign in instead.');
+      }
+
+      const account = existingAccount ?? (await createAccount(normalizedEmail));
+      const session: SessionUser = { email: account.email, name: account.name };
+
+      await writeSession(session);
+      setUser(session);
+    } catch (error) {
+      if (error instanceof ApiError) throw error;
+      console.warn('[auth] unexpected error', error);
+      throw new Error('Something went wrong. Please try again.');
     }
-
-    if (mode === 'signup' && existingAccount) {
-      throw new Error('This email already has an account. Sign in instead.');
-    }
-
-    const account = existingAccount ?? (await createAccount(normalizedEmail));
-    const session: SessionUser = { email: account.email, name: account.name };
-
-    await writeSession(session);
-    setUser(session);
   }, []);
 
   const signOut = useCallback(async () => {

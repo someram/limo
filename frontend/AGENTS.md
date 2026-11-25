@@ -25,7 +25,7 @@ Run lint and typecheck before declaring any task done.
 
 ## Project structure
 
-Limo is a local-only demo chat/video-call app (no backend; data is mocked and persisted on device). Path aliases: `@/*` → `src/*`, `@/assets/*` → `assets/*`.
+Limo is a demo chat/video-call app. Auth and user records are served by the Bun backend in `../backend` (Bun SQL/Postgres); contacts, chats, and calls are mocked and persisted on device. Path aliases: `@/*` → `src/*`, `@/assets/*` → `assets/*`.
 
 ```text
 src/
@@ -44,7 +44,7 @@ src/
   components/          Reusable components; components/ui/ holds design-system primitives
   providers/           React context (auth-provider: user, isLoading, authenticate, signOut)
   hooks/               Reusable hooks (chat conversation, last call)
-  lib/                 Persistence and stores: accounts, session (+ session.web), chat-store, call-store
+  lib/                 API client and stores: accounts (backend auth), session (+ session.web), chat-store, call-store
   constants/theme.ts   Design tokens: usePalette(), spacing, radius, typography
   data/contacts.ts     Mock contacts, MY_USER_ID, conversationIdFor()
   types.ts             Shared domain types (Contact, SessionUser, ChatMessage, CallRecord…)
@@ -60,8 +60,9 @@ Conventions:
 
 - Keep `src/app/` files as thin route wrappers; put screen UI in `src/screens/`.
 - Use `usePalette()` and the `spacing`/`radius`/`typography` tokens from `@/constants/theme`; never hardcode colors or spacing.
-- Auth state: `AuthProvider` restores the session on launch. Session uses `expo-secure-store` on native and `session.web.ts` (localStorage) on web. Accounts are stored in AsyncStorage.
-- All app data is local/mock; there is no API layer.
+- Auth state: `AuthProvider` restores the session on launch. Session uses `expo-secure-store` on native and `session.web.ts` (localStorage) on web. Accounts live in the backend database and are reached through `lib/accounts.ts`.
+- In development `lib/api.ts` sends API requests to the Metro dev server under `/api`, and `metro.config.js` proxies those to the backend on `127.0.0.1:3000`. This keeps Expo LAN and tunnel mode working. Set `EXPO_PUBLIC_API_URL` to override the backend URL.
+- Chat/call data remains local/mock; only auth talks to the backend.
 
 ### Routing invariant (important)
 
