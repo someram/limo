@@ -9,6 +9,7 @@ export type StoredAccount = {
 type ApiUser = {
   id: string;
   username: string;
+  name: string;
   email: string;
 };
 
@@ -68,7 +69,7 @@ async function request(path: string, email: string): Promise<ApiUser> {
 function toAccount(user: ApiUser): StoredAccount {
   return {
     email: user.email,
-    name: user.username,
+    name: user.name,
     createdAt: Date.now(),
   };
 }
@@ -86,4 +87,41 @@ export async function findAccount(email: string) {
 export async function createAccount(email: string): Promise<StoredAccount> {
   const user = await request('/auth/signup', email);
   return toAccount(user);
+}
+
+export async function updateName(email: string, name: string): Promise<StoredAccount> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}/auth/update-name`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, name }),
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (__DEV__) console.warn(`[api] update-name request failed (${API_URL})`, error);
+    throw new ApiError(0, "We couldn't connect. Check your connection and try again.");
+  } finally {
+    clearTimeout(timeout);
+  }
+
+  const data = (await response.json().catch(() => null)) as ApiBody | null;
+
+  if (!response.ok) {
+    if (response.status >= 500) {
+      if (__DEV__) console.warn(`[api] update-name server error`, response.status, data);
+      throw new ApiError(response.status, 'Something went wrong on our end. Please try again.');
+    }
+    throw new ApiError(response.status, data?.error ?? 'Something went wrong. Please try again.');
+  }
+
+  if (!data?.user) {
+    if (__DEV__) console.warn(`[api] update-name unexpected response`, response.status, data);
+    throw new ApiError(response.status, 'Something went wrong. Please try again.');
+  }
+
+  return toAccount(data.user);
 }

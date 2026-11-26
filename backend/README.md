@@ -1,23 +1,39 @@
-# backend
+# Limo backend
 
-To install dependencies:
+Bun + Postgres auth API for the Limo app.
+
+## Setup
 
 ```bash
 bun install
 ```
 
-To run:
+Create `backend/.env`:
 
 ```bash
-bun run index.ts
+DATABASE_URL="postgres://user:password@localhost:5432/limo_db"
+PORT=3000
 ```
 
-To type check:
+Bun loads `.env` automatically. The server creates the `users` table from `schema/001_users.sql` on startup.
+
+## Run
 
 ```bash
-bun check
+bun run dev     # watch mode
+bun run start   # once
 ```
 
-Run `bun fmt` to format the code.
+## Endpoints
 
-This project was created using `bun init` in bun v1.4.4. [Bun](https://bun.com) is a fast all-in-one JavaScript runtime.
+- `GET /health`
+- `POST /auth/signup` with `{ "email": "..." }`
+- `POST /auth/signin` with `{ "email": "..." }`
+
+Sign up generates a non-editable username in the form `limoid_xxxxx` and stores the user in Postgres. Sign in looks the user up by email.
+
+## Type check
+
+```bash
+bun run typecheck
+```

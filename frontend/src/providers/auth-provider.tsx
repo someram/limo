@@ -1,6 +1,6 @@
 import { createContext, use, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 
-import { ApiError, createAccount, findAccount } from '@/lib/accounts';
+import { ApiError, createAccount, findAccount, updateName } from '@/lib/accounts';
 import { clearSession, readSession, writeSession } from '@/lib/session';
 import type { SessionUser } from '@/types';
 import { isValidEmail } from '@/utils/format';
@@ -11,6 +11,7 @@ type AuthContextValue = {
   user: SessionUser | null;
   isLoading: boolean;
   authenticate: (email: string, mode: AuthMode) => Promise<void>;
+  updateUser: (name: string) => Promise<void>;
   signOut: () => Promise<void>;
 };
 
@@ -83,9 +84,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }, []);
 
+  const updateUser = useCallback(async (name: string) => {
+    if (!user) throw new Error('No user signed in');
+    const account = await updateName(user.email, name);
+    const session: SessionUser = { email: account.email, name: account.name };
+    await writeSession(session);
+    setUser(session);
+  }, [user]);
+
   const value = useMemo(
-    () => ({ user, isLoading, authenticate, signOut }),
-    [user, isLoading, authenticate, signOut]
+    () => ({ user, isLoading, authenticate, updateUser, signOut }),
+    [user, isLoading, authenticate, updateUser, signOut]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
